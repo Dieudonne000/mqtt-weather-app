@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Climate Monitor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.1.3/axios.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Roboto+Mono:wght@400;500;700&display=swap');
+
+:root {
+    --bg-color: #f4f4f4;
+    --card-bg: #ffffff;
+    --border-color: #ddd;
+    --primary-color: #ff7f50;
+    --secondary-color: #007bff;
+    --text-primary: #333;
+    --text-secondary: #555;
+    --shadow-color: rgba(0, 0, 0, 0.1);
+    --chart-grid: rgba(0, 0, 0, 0.08);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg-color);
+    color: var(--text-primary);
+    min-height: 100vh;
+    line-height: 1.6;
+}
+
+.dashboard {
+    max-width: 1300px;
+    margin: 0 auto;
+    padding: 1.5rem;
+}
+
+.title-section {
+    text-align: center;
+    margin-bottom: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+}
+
+.title-section h1 {
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: 1px;
+}
+
+.title-section i {
+    font-size: 2rem;
+    color: var(--primary-color);
+}
+
+.main-container {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+}
+
+.chart-section {
+    background: var(--card-bg);
+    border-radius: 1rem;
+    padding: 1.5rem;
+    box-shadow: 0 4px 8px var(--shadow-color);
+    border: 1px solid var(--border-color);
+}
+
+.chart-container {
+    height: 400px;
+    width: 100%;
+    position: relative;
+    margin: 1rem 0;
+}
+
+.section-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.section-title i {
+    color: var(--primary-color);
+}
+
+.section-description {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+    padding-left: 2rem;
+}
+
+.metrics-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+}
+
+.metric-card {
+    background: var(--card-bg);
+    border-radius: 1rem;
+    padding: 1.5rem;
+    min-height: 180px;
+    box-shadow: 0 4px 6px var(--shadow-color);
+    transition: all 0.3s ease;
+    border: 1px solid var(--border-color);
+}
+
+.metric-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 6px 12px var(--shadow-color);
+}
+
+.metric-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+}
+
+.metric-label {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.temperature .metric-label i {
+    color: var(--primary-color);
+}
+
+.humidity .metric-label i {
+    color: var(--secondary-color);
+}
+
+.metric-value-container {
+    display: flex;
+    align-items: baseline;
+    margin: 0.5rem 0;
+}
+
+.metric-value {
+    font-family: 'Roboto Mono', monospace;
+    font-size: 3rem;
+    font-weight: 700;
+}
+
+.temperature .metric-value {
+    color: var(--primary-color);
+}
+
+.humidity .metric-value {
+    color: var(--secondary-color);
+}
+
+.metric-unit {
+    font-family: 'Roboto Mono', monospace;
+    font-size: 1.25rem;
+    margin-left: 0.25rem;
+    opacity: 0.8;
+}
+
+.metric-footer {
+    margin-top: auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.metric-average {
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 2rem;
+    padding: 0.4rem 0.75rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.live-indicator {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 2rem;
+    padding: 0.4rem 0.75rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    gap: 0.4rem;
+}
+
+.live-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    animation: blink 1.5s ease-in-out infinite;
+}
+
+.temperature .live-dot {
+    background-color: var(--primary-color);
+}
+
+.humidity .live-dot {
+    background-color: var(--secondary-color);
+}
+
+@keyframes blink {
+    0% { opacity: 1; }
+    50% { opacity: 0.4; }
+    100% { opacity: 1; }
+}
+
+.status-section {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 0.5rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.status-item {
+    display: flex;
+    align-items: center;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    gap: 0.5rem;
+}
+
+.status-value {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.pulse {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--secondary-color);
+    animation: pulse 2s infinite;
+}
+
+.pulse.error {
+    background: red;
+}
+
+@keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(0, 123, 255, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(0, 123, 255, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(0, 123, 255, 0); }
+}
+
+/* Responsive Styles */
+@media (max-width: 768px) {
+    .dashboard {
+        padding: 1rem;
+    }
+    
+    .title-section h1 {
+        font-size: 1.75rem;
+    }
+    
+    .chart-container {
+        height: 300px;
+    }
+    
+    .status-section {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .title-section h1 {
+        font-size: 1.5rem;
+    }
+    
+    .metric-card {
+        min-height: 160px;
+        padding: 1rem;
+    }
+    
+    .metric-value {
+        font-size: 2.25rem;
+    }
+    
+    .chart-container {
+        height: 250px;
+    }
+}
+
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <div class="title-section">
+            <h1>Weather Data Monitoring app</h1>
+        </div>
+        
+        <div class="main-container">
+            <!-- Graph section on top -->
+            <div class="chart-section">
+                <div class="section-title">
+                    <i class="fas fa-chart-line"></i>
+                    Environmental Data Trends
+                </div>
+                <div class="section-description">
+                    <i class="fas fa-info-circle"></i> Temperature & humidity in a real-time graph
+                </div>
+                
+                <div class="chart-container">
+                    <canvas id="weatherChart"></canvas>
+                </div>
+                
+                <div class="status-section">
+                    <div class="status-item">
+                        <div id="db-pulse" class="pulse"></div>
+                        <i class="fas fa-database"></i>
+                        Database Status: <span id="db-status" class="status-value">Waiting for data...</span>
+                    </div>
+                    <div class="status-item">
+                        <i class="fas fa-satellite-dish"></i>
+                        MQTT Connection: <span class="status-value">Active</span>
+                    </div>
+                    <div class="status-item">
+                        <i class="fas fa-history"></i>
+                        Last update: <span id="last-update" class="status-value">--</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Metrics cards below -->
+            <div class="metrics-container">
+                <div class="metric-card temperature">
+                    <div class="metric-header">
+                        <div class="metric-label">
+                            <i class="fas fa-thermometer-three-quarters"></i>
+                            TEMPERATURE
+                        </div>
+                        <i class="fas fa-fire-alt" style="color: var(--temp-color);"></i>
+                    </div>
+                    
+                    <div class="metric-value-container">
+                        <div class="metric-value"><span id="temp">--</span></div>
+                        <div class="metric-unit">°C</div>
+                    </div>
+                    
+                    <div class="metric-footer">
+                        <div class="metric-average">
+                            <i class="fas fa-calculator"></i> Avg: <span id="avg-temp">--</span>°C
+                        </div>
+                        <div class="live-indicator">
+                            <div class="live-dot"></div> LIVE
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="metric-card humidity">
+                    <div class="metric-header">
+                        <div class="metric-label">
+                            <i class="fas fa-tint"></i>
+                            HUMIDITY
+                        </div>
+                        <i class="fas fa-cloud-rain" style="color: var(--humidity-color);"></i>
+                    </div>
+                    
+                    <div class="metric-value-container">
+                        <div class="metric-value"><span id="humidity">--</span></div>
+                        <div class="metric-unit">%</div>
+                    </div>
+                    
+                    <div class="metric-footer">
+                        <div class="metric-average">
+                            <i class="fas fa-calculator"></i> Avg: <span id="avg-humidity">--</span>%
+                        </div>
+                        <div class="live-indicator">
+                            <div class="live-dot"></div> LIVE
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="script.js">
+    </script>
+</body>
+</html>
